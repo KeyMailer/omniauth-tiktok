@@ -12,9 +12,11 @@ module OmniAuth
       option :name, 'tiktok'
 
       option :client_options, {
+        id_key: 'client_key',
         site: 'https://open-api.tiktok.com',
         authorize_url: 'https://open-api.tiktok.com/platform/oauth/connect',
         token_url: 'https://open-api.tiktok.com/oauth/access_token',
+        token_method: :post_with_query_string,
         extract_access_token: proc do |client, hash|
           hash = hash['data']
           token = hash.delete('access_token') || hash.delete(:access_token)
@@ -62,20 +64,19 @@ module OmniAuth
         options[:callback_url] || (full_host + script_name + callback_path)
       end
 
-      def authorize_params
+      def authorize_paramsv
         super.tap do |params|
           params[:scope] ||= DEFAULT_SCOPE
           params[:response_type] = 'code'
-          params.delete(:client_id)
-          params[:client_key] = options.client_id
         end
       end
 
-      def token_params
-        super.tap do |params|
-          params.delete(:client_id)
-          params[:client_key] = options.client_id
-        end
+      protected
+
+      def build_access_token
+        # tiktok does not need the redirect url
+        verifier = request.params["code"]
+        client.auth_code.get_token(verifier, token_params.to_hash(:symbolize_keys => true), deep_symbolize(options.auth_token_params))
       end
 
       private
