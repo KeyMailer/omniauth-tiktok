@@ -7,20 +7,18 @@ module OmniAuth
     class Tiktok < OmniAuth::Strategies::OAuth2
       class NoAuthorizationCodeError < StandardError; end
       DEFAULT_SCOPE = 'user.info.basic,video.list'
-      USER_INFO_URL = 'https://open-api.tiktok.com/oauth/userinfo'
+      USER_INFO_URL = 'https://open.tiktokapis.com/v2/user/info/'
 
       option :name, 'tiktok'
 
       option :client_options, {
         id_key: 'client_key',
-        site: 'https://open-api.tiktok.com',
-        authorize_url: 'https://open-api.tiktok.com/platform/oauth/connect',
-        token_url: 'https://open-api.tiktok.com/oauth/access_token',
-        token_method: :post_with_query_string,
+        site: 'https://open.tiktokapis.com',
+        authorize_url: 'https://www.tiktok.com/v2/auth/authorize/',
+        token_url: 'https://open.tiktokapis.com/v2/oauth/token/',
+        token_method: :post,
         extract_access_token: proc do |client, hash|
-          hash = hash['data']
-          token = hash.delete('access_token') || hash.delete(:access_token)
-          token && ::OAuth2::AccessToken.new(client, token, hash)
+          ::OAuth2::AccessToken.from_hash(client, hash)
         end
       }
 
@@ -30,8 +28,8 @@ module OmniAuth
 
       info do
         result = {
-          'nickname' => raw_info['data']['display_name'],
-          'image' => raw_info['data']['avatar_larger']
+          'nickname' => raw_info['data']['user']['display_name'],
+          'image' => raw_info['data']['user']['avatar_url']
         }
 
         prune!(result)
@@ -56,7 +54,7 @@ module OmniAuth
 
       def raw_info
         @raw_info ||= access_token
-                      .get("#{USER_INFO_URL}?open_id=#{access_token.params['open_id']}&access_token=#{access_token.token}")
+                      .get("#{USER_INFO_URL}?fields=avatar_url,display_name")
                       .parsed || {}
       end
 
@@ -64,20 +62,24 @@ module OmniAuth
         options[:callback_url] || (full_host + script_name + callback_path)
       end
 
-      def authorize_paramsv
+
+      def authorize_params
         super.tap do |params|
           params[:scope] ||= DEFAULT_SCOPE
           params[:response_type] = 'code'
+          # params.delete(:client_id)
+          # params[:client_key] = options.client_id
         end
       end
 
-      protected
-
-      def build_access_token
-        # tiktok does not need the redirect url
-        verifier = request.params["code"]
-        client.auth_code.get_token(verifier, token_params.to_hash(:symbolize_keys => true), deep_symbolize(options.auth_token_params))
+=begin  This doesn't work for me... Using modified OAuth2 library instead
+      def token_params
+        super.tap do |params|
+          params.delete(:client_id)
+          params[:client_key] = options.client_id
+        end
       end
+=end
 
       private
 
